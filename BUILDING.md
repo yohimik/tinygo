@@ -126,32 +126,28 @@ TinyGo will get extracted to a `tinygo` directory. You can then call it with:
 
 ## Publish a release
 
-The `Release` workflow (`.github/workflows/release.yml`) publishes releases. It
-does not build anything. The Linux, macOS and Windows workflows already build
-every file that a release needs when the `release` branch is pushed, so the
-release workflow collects the artifacts of those runs for the tagged commit.
-What ships is what was tested.
+Releases are built and published by the `Release` workflow
+(`.github/workflows/release.yml`), which runs when a `v*` tag is pushed. There
+is no need to build or upload anything by hand.
 
  1. On the `dev` branch, set `const version` in `goenv/version.go` to the new
-    version (without a `v` prefix), and add the entry to `CHANGELOG.md`.
+    version (without a `v` prefix) and update `CHANGELOG.md`.
  2. Merge `dev` into the `release` branch.
- 3. Tag that commit and push the tag:
+ 3. Tag the release and push the tag:
 
         git tag v0.42.0
         git push origin v0.42.0
 
-    The tag must be `v` plus the version in `goenv/version.go`, because the
-    release file names come from that constant.
- 4. The workflow waits for the Linux, macOS and Windows runs of the tagged
-    commit, collects their nine files, and creates a **draft** release. The
-    release notes come from the `CHANGELOG.md` entry for that version.
- 5. Review the draft release and publish it.
- 6. On the `dev` branch, set `goenv/version.go` to the next `-dev` version.
+    The tag must match `goenv/version.go`; the workflow refuses to build
+    otherwise, because the release filenames are derived from that constant.
+ 4. The workflow runs the full Linux, macOS and Windows workflows, so
+    everything that ships is also tested, and then collects their artifacts
+    into a **draft** release: tarballs for linux/darwin, a zip for Windows, and
+    Debian packages for linux.
+ 5. Review the generated release notes, paste in the `CHANGELOG.md` entry, and
+    publish the draft.
 
-To release again after a failure, delete the draft release and start the
-workflow from the Actions tab with the tag as its input.
-
-GitHub keeps a SHA-256 digest of every published file. The digest is not shown
-on the release page, but it can be printed with:
+GitHub records a SHA-256 digest for every published asset. It is not shown on
+the release page, but it can be read with:
 
     gh release view v0.42.0 --json assets --jq '.assets[] | "\(.digest)  \(.name)"'
