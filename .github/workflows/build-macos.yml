@@ -6,6 +6,7 @@ on:
     branches:
       - dev
       - release
+      - 'release/**'
   workflow_call:
 
 concurrency:
