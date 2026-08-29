@@ -139,6 +139,16 @@ func registerWeakPointer(ptr unsafe.Pointer) unsafe.Pointer {
 	return ptr
 }
 
+//go:linkname makeStrongFromWeak weak.runtime_makeStrongFromWeak
+func makeStrongFromWeak(ptr unsafe.Pointer) unsafe.Pointer {
+	// Weak pointers are not actually weak here: registerWeakPointer above
+	// hands back the pointer it was given, so the value it refers to is never
+	// reclaimed and turning the weak pointer back into a strong one is the
+	// identity too. weak.Pointer.Value therefore never reports the value as
+	// collected, which is a permitted (if conservative) answer.
+	return ptr
+}
+
 var godebugUpdate func(string, string)
 
 //go:linkname godebug_setUpdate internal/godebug.setUpdate
