@@ -45,7 +45,7 @@ func GetCachedGoroot(config *compileopts.Config) (string, error) {
 	}
 
 	// Find the overrides needed for the goroot.
-	overrides := pathsToOverride(config.GoMinorVersion, needsSyscallPackage(config.BuildTags()))
+	overrides := pathsToOverride(config.GoMinorVersion, needsSyscallPackage(config.BuildTags()), needsTLSStubPackage(config.GOOS(), config.BuildTags()))
 
 	// Resolve the merge links within the goroot.
 	merge, err := listGorootMergeLinks(goroot, tinygoroot, overrides)
@@ -225,14 +225,36 @@ func needsSyscallPackage(buildTags []string) bool {
 	return false
 }
 
+// needsTLSStubPackage returns whether the crypto/tls package should be
+// overridden with the TinyGo stub version, whose handshake is a no-op. That
+// stub exists because a target without an OS underneath it has neither the code
+// size budget for a full TLS implementation nor, usually, a socket to speak it
+// over — such targets either offload TLS to the network coprocessor or do
+// without.
+//
+// Hosted linux and macOS have both, and there the real crypto/tls from the Go
+// standard library compiles and runs, so it is used instead. GOOS alone cannot
+// make this decision: baremetal targets report GOOS=linux, so the build tags
+// decide, mirroring the constraint on the host netdev in src/net.
+func needsTLSStubPackage(goos string, buildTags []string) bool {
+	if goos != "linux" && goos != "darwin" {
+		return true
+	}
+	for _, tag := range buildTags {
+		if tag == "baremetal" || tag == "nintendoswitch" || tag == "tinygo.wasm" || tag == "wasm_unknown" {
+			return true
+		}
+	}
+	return false
+}
+
 // The boolean indicates whether to merge the subdirs. True means merge, false
 // means use the TinyGo version.
-func pathsToOverride(goMinor int, needsSyscallPackage bool) map[string]bool {
+func pathsToOverride(goMinor int, needsSyscallPackage, needsTLSStubPackage bool) map[string]bool {
 	paths := map[string]bool{
 		"":                            true,
 		"crypto/":                     true,
 		"crypto/rand/":                false,
-		"crypto/tls/":                 false,
 		"crypto/x509/":                true,
 		"crypto/x509/internal/":       true,
 		"crypto/x509/internal/macos/": false,
@@ -261,6 +283,12 @@ func pathsToOverride(goMinor int, needsSyscallPackage bool) map[string]bool {
 		"testing/":                    true,
 		"tinygo/":                     false,
 		"unique/":                     false,
+	}
+
+	if needsTLSStubPackage {
+		// Otherwise crypto/tls is left out of the overrides entirely, so the
+		// "crypto/" merge above links in the standard library's own package.
+		paths["crypto/tls/"] = false
 	}
 
 	if goMinor >= 19 {
