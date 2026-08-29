@@ -97,9 +97,12 @@ jobs:
               gh release view $GITHUB_REF_NAME --repo $GITHUB_REPOSITORY --json assets --jq '.assets[] | "\(.digest)  \(.name)"'
           EOF
           )
+          # Semver says any tag with a pre-release part — everything after the
+          # first hyphen — is not a final release, whatever that part is
+          # called, so mark all of them rather than a list of known suffixes.
           prerelease=
           case "$GITHUB_REF_NAME" in
-            *-alpha*|*-beta*|*-rc*) prerelease=--prerelease ;;
+            *-*) prerelease=--prerelease ;;
           esac
           gh release create "$GITHUB_REF_NAME" \
             --draft \
