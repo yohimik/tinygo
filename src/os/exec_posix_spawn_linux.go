@@ -2,6 +2,8 @@
 
 package os
 
+import "syscall"
+
 // Storage for the two by-value POSIX objects posix_spawn takes. musl declares
 // them in lib/musl/include/spawn.h as
 //
@@ -33,3 +35,37 @@ type spawnAttr [48]uint64
 // musl's sigset_t, 128 bytes on every architecture. The zero value is the
 // empty set, which is the only mask this package installs.
 type sigset [16]uint64
+
+// checkSysProcAttr reports whether the SysProcAttr a caller passed asks for
+// anything posix_spawn cannot do. Linux's syscall.SysProcAttr carries a good
+// many more fields than the POSIX set, and every one of them needs the child to
+// run Go code between the clone and the exec, which is precisely what this
+// implementation does not do.
+func checkSysProcAttr(sys *syscall.SysProcAttr) error {
+	if err := checkSysProcAttrCommon(sys); err != nil {
+		return err
+	}
+	switch {
+	case sys.Pdeathsig != 0:
+		return errUnsupportedSysField("Pdeathsig")
+	case sys.Cloneflags != 0:
+		return errUnsupportedSysField("Cloneflags")
+	case sys.Unshareflags != 0:
+		return errUnsupportedSysField("Unshareflags")
+	case sys.UidMappings != nil:
+		return errUnsupportedSysField("UidMappings")
+	case sys.GidMappings != nil:
+		return errUnsupportedSysField("GidMappings")
+	case sys.GidMappingsEnableSetgroups:
+		return errUnsupportedSysField("GidMappingsEnableSetgroups")
+	case sys.AmbientCaps != nil:
+		return errUnsupportedSysField("AmbientCaps")
+	case sys.UseCgroupFD:
+		return errUnsupportedSysField("UseCgroupFD")
+	case sys.CgroupFD != 0:
+		return errUnsupportedSysField("CgroupFD")
+	case sys.PidFD != nil:
+		return errUnsupportedSysField("PidFD")
+	}
+	return nil
+}

@@ -53,6 +53,11 @@ var (
 // the ones explicitly set to SIG_IGN, which the TinyGo runtime never does.
 const _POSIX_SPAWN_SETSIGMASK = 0x08
 
+// POSIX_SPAWN_SETPGROUP, which makes posix_spawn put the child in the process
+// group named by posix_spawnattr_setpgroup. The value is 2 in musl
+// (lib/musl/include/spawn.h) and in Darwin's <sys/spawn.h> alike.
+const _POSIX_SPAWN_SETPGROUP = 0x02
+
 // Keep compatible with golang and always succeed and return new proc with pid.
 func findProcess(pid int) (*Process, error) {
 	return &Process{Pid: pid}, nil
@@ -207,10 +212,13 @@ func startProcess(name string, argv []string, attr *ProcAttr) (p *Process, err e
 		attr = new(ProcAttr)
 	}
 	if attr.Sys != nil {
-		// SysProcAttr asks for things posix_spawn cannot express (setsid,
-		// credentials, a controlling terminal, ...). Reject it rather than
-		// silently ignoring what the caller asked for.
-		return nil, ErrNotImplementedSys
+		// Everything posix_spawn cannot express (setsid, credentials, a
+		// controlling terminal, ptrace, ...) is rejected by name rather than
+		// silently ignored. Only Setpgid/Pgid are honoured; see
+		// checkSysProcAttr in the per-OS files.
+		if err := checkSysProcAttr(attr.Sys); err != nil {
+			return nil, err
+		}
 	}
 
 	pid, err := forkExec(name, argv, attr)
@@ -269,7 +277,22 @@ func forkExec(argv0 string, argv []string, attr *ProcAttr) (pid int, err error) 
 	if errno := posix_spawnattr_setsigmask(&sa, &mask); errno != 0 {
 		return 0, syscall.Errno(errno)
 	}
-	if errno := posix_spawnattr_setflags(&sa, _POSIX_SPAWN_SETSIGMASK); errno != 0 {
+
+	flags := int16(_POSIX_SPAWN_SETSIGMASK)
+
+	// Setpgid is the one SysProcAttr field posix_spawn can express, and the one
+	// process-shaped programs actually reach for: a shell script runner puts
+	// each child in its own process group so that it can signal the whole tree
+	// with kill(-pgid). Pgid == 0 means "a new group whose id is the child's
+	// pid", which is exactly what posix_spawnattr_setpgroup(0) does.
+	if attr.Sys != nil && attr.Sys.Setpgid {
+		if errno := posix_spawnattr_setpgroup(&sa, int32(attr.Sys.Pgid)); errno != 0 {
+			return 0, syscall.Errno(errno)
+		}
+		flags |= _POSIX_SPAWN_SETPGROUP
+	}
+
+	if errno := posix_spawnattr_setflags(&sa, flags); errno != 0 {
 		return 0, syscall.Errno(errno)
 	}
 
@@ -366,3 +389,53 @@ func posix_spawnattr_setflags(sa *spawnAttr, flags int16) int32
 
 //go:linkname posix_spawnattr_setsigmask posix_spawnattr_setsigmask
 func posix_spawnattr_setsigmask(sa *spawnAttr, mask *sigset) int32
+
+//go:linkname posix_spawnattr_setpgroup posix_spawnattr_setpgroup
+func posix_spawnattr_setpgroup(sa *spawnAttr, pgroup int32) int32
+
+// unsupportedSysFieldError names the SysProcAttr field a caller set that this
+// implementation cannot honour. It unwraps to ErrNotImplementedSys so that code
+// written against the older, all-or-nothing behaviour keeps working.
+type unsupportedSysFieldError struct {
+	field string
+}
+
+func (e *unsupportedSysFieldError) Error() string {
+	return "os: SysProcAttr." + e.field + ": " + ErrNotImplementedSys.Error()
+}
+
+func (e *unsupportedSysFieldError) Unwrap() error {
+	return ErrNotImplementedSys
+}
+
+// errUnsupportedSysField is the constructor the per-OS checkSysProcAttr uses.
+func errUnsupportedSysField(field string) error {
+	return &unsupportedSysFieldError{field: field}
+}
+
+// checkSysProcAttrCommon rejects every field that both Linux and Darwin declare
+// and that posix_spawn cannot express. Setpgid and Pgid are deliberately absent
+// — they are the two fields forkExec honours. Pgid is ignored when Setpgid is
+// false, which is what the syscall package documents and what os/exec on other
+// platforms does.
+func checkSysProcAttrCommon(sys *syscall.SysProcAttr) error {
+	switch {
+	case sys.Chroot != "":
+		return errUnsupportedSysField("Chroot")
+	case sys.Credential != nil:
+		return errUnsupportedSysField("Credential")
+	case sys.Ptrace:
+		return errUnsupportedSysField("Ptrace")
+	case sys.Setsid:
+		return errUnsupportedSysField("Setsid")
+	case sys.Setctty:
+		return errUnsupportedSysField("Setctty")
+	case sys.Noctty:
+		return errUnsupportedSysField("Noctty")
+	case sys.Ctty != 0:
+		return errUnsupportedSysField("Ctty")
+	case sys.Foreground:
+		return errUnsupportedSysField("Foreground")
+	}
+	return nil
+}
