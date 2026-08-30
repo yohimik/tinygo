@@ -529,6 +529,15 @@ func (b *builder) createDarwinFuncPCABI0Call(instr *ssa.CallCommon) llvm.Value {
 		// in C.
 		name = "syscall_libc_open"
 	}
+	if name == "fcntl" {
+		// Same for fcntl(), whose third parameter is variadic. Without the
+		// wrapper the callee reads that argument from the stack while we pass
+		// it in a register, so it receives whatever the stack happened to
+		// hold: syscall.CloseOnExec silently fails to set FD_CLOEXEC for some
+		// binaries and not others, and every descriptor then leaks into every
+		// process the program starts.
+		name = "syscall_libc_fcntl"
+	}
 	if b.GOARCH == "amd64" {
 		if name == "fdopendir" || name == "readdir_r" {
 			// Hack to support amd64, which needs the $INODE64 suffix.

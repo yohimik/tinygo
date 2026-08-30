@@ -3,6 +3,7 @@
 // This file is included in the build, despite the //go:build line above.
 
 #include <fcntl.h>
+#include <stdint.h>
 
 // Wrapper function because 'open' is a variadic function and variadic functions
 // use a different (incompatible) calling convention on darwin/arm64.
@@ -10,6 +11,22 @@
 // syscall.libc_open_trampoline function.
 int syscall_libc_open(const char *pathname, int flags, mode_t mode) {
     return open(pathname, flags, mode);
+}
+
+// Same story for 'fcntl', for the same reason: its third parameter is variadic,
+// so calling it through a plain three-argument function pointer leaves the
+// callee reading that argument from whatever the stack happened to hold. The
+// symptom is a silent one — fcntl(fd, F_SETFD, FD_CLOEXEC) sets the flag or
+// not depending on stack residue, so descriptors leak into spawned children
+// and a child holding a duplicate write end keeps a pipe from reporting EOF.
+//
+// The argument is taken as a uintptr_t so that the pointer-shaped commands
+// (F_GETLK, F_SETLK, F_PREALLOCATE, ...) reached through syscall.fcntlPtr go
+// through the same wrapper: both spellings share libc_fcntl_trampoline, and on
+// a little-endian target the int-shaped commands read the low half of the same
+// stack slot.
+int syscall_libc_fcntl(int fd, int cmd, uintptr_t arg) {
+    return fcntl(fd, cmd, arg);
 }
 
 // The following functions are called by the runtime because Go can't call
