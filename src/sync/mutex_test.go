@@ -5,6 +5,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 type mutex interface {
@@ -266,5 +267,91 @@ func TestRWMutex(t *testing.T) {
 	}
 	for range 10 {
 		<-c
+	}
+}
+
+// A writer must not be held up forever by readers that arrive after it does.
+//
+// The reader count alone cannot tell a reader that holds the lock from one
+// queued behind the writer, so a writer that waits for "no readers at all"
+// waits for a condition that a steady trickle of new readers keeps false. This
+// is the shape that wedged syscall.ForkLock — os.Pipe read-locks it and
+// os.StartProcess write-locks it — and hung any program that spawned processes
+// and made pipes at the same time.
+func TestRWMutexWriterNotStarvedByLateReaders(t *testing.T) {
+	var m sync.RWMutex
+	locked := make(chan struct{})
+
+	// A reader holds the lock, so the writer has to wait for it.
+	m.RLock()
+
+	go func() {
+		m.Lock()
+		m.Unlock()
+		close(locked)
+	}()
+	// Give the writer time to register itself.
+	time.Sleep(50 * time.Millisecond)
+
+	// A second reader arrives while the writer waits. It must queue behind the
+	// writer rather than joining the count the writer is waiting on.
+	secondReader := make(chan struct{})
+	go func() {
+		m.RLock()
+		m.RUnlock()
+		close(secondReader)
+	}()
+	time.Sleep(50 * time.Millisecond)
+
+	// The first reader leaves, which is the last thing the writer was waiting
+	// for.
+	m.RUnlock()
+
+	select {
+	case <-locked:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the writer was never woken after the last reader unlocked")
+	}
+	select {
+	case <-secondReader:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the queued reader was never woken after the writer unlocked")
+	}
+}
+
+// Readers released by an Unlock must acquire the lock rather than re-reading
+// the reader count: a writer arriving in between rebases that count, which
+// would send them back to sleep after their wakeup had already been spent —
+// while that writer waits for them, having counted them when it arrived.
+func TestRWMutexHandoffToQueuedReaders(t *testing.T) {
+	var m sync.RWMutex
+	const iterations = 5000
+	done := make(chan struct{})
+
+	for range 4 {
+		go func() {
+			for range iterations {
+				m.RLock()
+				m.RUnlock()
+			}
+			done <- struct{}{}
+		}()
+	}
+	for range 3 {
+		go func() {
+			for range iterations {
+				m.Lock()
+				m.Unlock()
+			}
+			done <- struct{}{}
+		}()
+	}
+
+	for range 7 {
+		select {
+		case <-done:
+		case <-time.After(30 * time.Second):
+			t.Fatal("readers and writers deadlocked handing the lock over")
+		}
 	}
 }
