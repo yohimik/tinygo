@@ -5,6 +5,10 @@ import (
 	"syscall"
 )
 
+// Errors StartProcess may return for a ProcAttr it cannot honour. On a hosted
+// OS only ErrNotImplementedSys is still reachable: Dir and Files are carried
+// into the child by posix_spawn's file actions. The other two are kept because
+// they are part of this package's exported API.
 var (
 	ErrNotImplementedDir   = errors.New("directory setting not implemented")
 	ErrNotImplementedSys   = errors.New("sys setting not implemented")
@@ -36,56 +40,21 @@ type ProcAttr struct {
 // ErrProcessDone indicates a Process has finished.
 var ErrProcessDone = errors.New("os: process already finished")
 
-type ProcessState struct {
-}
-
-func (p *ProcessState) String() string {
-	return "" // TODO
-}
-func (p *ProcessState) Success() bool {
-	return false // TODO
-}
-
-// Sys returns system-dependent exit information about
-// the process. Convert it to the appropriate underlying
-// type, such as syscall.WaitStatus on Unix, to access its contents.
-func (p *ProcessState) Sys() interface{} {
-	return nil // TODO
-}
-
-func (p *ProcessState) Exited() bool {
-	return false // TODO
-}
-
-// ExitCode returns the exit code of the exited process, or -1
-// if the process hasn't exited or was terminated by a signal.
-func (p *ProcessState) ExitCode() int {
-	return -1 // TODO
-}
-
 type Process struct {
 	Pid int
+
+	// done reports whether Wait has already reaped this process. Signalling a
+	// reaped pid is unsafe: the number may by then belong to an unrelated
+	// process. Accessed atomically, because Kill is routinely called from
+	// another goroutine than the one blocked in Wait — that is exactly what
+	// exec.CommandContext does when the context expires.
+	done int32
 }
 
 // StartProcess starts a new process with the program, arguments and attributes specified by name, argv and attr.
 // Arguments to the process (os.Args) are passed via argv.
 func StartProcess(name string, argv []string, attr *ProcAttr) (*Process, error) {
 	return startProcess(name, argv, attr)
-}
-
-func (p *Process) Wait() (*ProcessState, error) {
-	if p.Pid == -1 {
-		return nil, syscall.EINVAL
-	}
-	return nil, ErrNotImplemented
-}
-
-func (p *Process) Kill() error {
-	return ErrNotImplemented
-}
-
-func (p *Process) Signal(sig Signal) error {
-	return ErrNotImplemented
 }
 
 func Ignore(sig ...Signal) {
