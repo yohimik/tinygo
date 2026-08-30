@@ -33,6 +33,10 @@ Checks:
 | `kill`         | `exec.CommandContext` kills the child when the context expires   |
 | `notexist`     | a missing binary is `os.ErrNotExist`                             |
 | `concurrent`   | sixteen simultaneous spawns all return their own output          |
+| `setpgid`      | `SysProcAttr{Setpgid: true}` gives the child its own group       |
+| `setpgid-join` | a non-zero `Pgid` joins an existing group                        |
+| `pgroup-inherit`| a plain spawn stays in the parent's process group               |
+| `sysunsupported`| a `SysProcAttr` field posix_spawn cannot honour is refused by name |
 
 Cross-compiling works the same way (`GOOS=darwin GOARCH=arm64 tinygo build …`);
 the resulting binary runs on a host of that platform. Every check should report

@@ -208,6 +208,105 @@ var checks = []check{
 		}
 		return fmt.Sprintf("%d spawns", n), first
 	}},
+
+	// A script runner puts each child in its own process group so that it can
+	// signal the whole tree with kill(-pgid). This is the shape that matters.
+	{"setpgid", func() (string, error) {
+		cmd := exec.Command("/bin/sleep", "30")
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+		if err := cmd.Start(); err != nil {
+			return "", err
+		}
+		defer func() {
+			cmd.Process.Kill()
+			cmd.Wait()
+		}()
+		pid := cmd.Process.Pid
+		pgid, err := syscall.Getpgid(pid)
+		if err != nil {
+			return fmt.Sprintf("pid=%d", pid), err
+		}
+		detail := fmt.Sprintf("pid=%d pgid=%d parent=%d", pid, pgid, os.Getpid())
+		if pgid != pid {
+			return detail, errors.New("the child did not lead its own process group")
+		}
+		// The whole point: one signal to the negated group id reaches it.
+		if err := syscall.Kill(-pgid, syscall.SIGTERM); err != nil {
+			return detail, fmt.Errorf("kill(-%d): %w", pgid, err)
+		}
+		return detail, nil
+	}},
+
+	{"setpgid-join", func() (string, error) {
+		leader := exec.Command("/bin/sleep", "30")
+		leader.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+		if err := leader.Start(); err != nil {
+			return "", err
+		}
+		defer func() {
+			leader.Process.Kill()
+			leader.Wait()
+		}()
+
+		joiner := exec.Command("/bin/sleep", "30")
+		joiner.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Pgid: leader.Process.Pid}
+		if err := joiner.Start(); err != nil {
+			return "", err
+		}
+		defer func() {
+			joiner.Process.Kill()
+			joiner.Wait()
+		}()
+
+		pgid, err := syscall.Getpgid(joiner.Process.Pid)
+		if err != nil {
+			return "", err
+		}
+		detail := fmt.Sprintf("leader=%d joiner=%d pgid=%d", leader.Process.Pid, joiner.Process.Pid, pgid)
+		if pgid != leader.Process.Pid {
+			return detail, errors.New("the second child did not join the first one's group")
+		}
+		return detail, nil
+	}},
+
+	{"pgroup-inherit", func() (string, error) {
+		cmd := exec.Command("/bin/sleep", "30")
+		if err := cmd.Start(); err != nil {
+			return "", err
+		}
+		defer func() {
+			cmd.Process.Kill()
+			cmd.Wait()
+		}()
+		pgid, err := syscall.Getpgid(cmd.Process.Pid)
+		if err != nil {
+			return "", err
+		}
+		parent, err := syscall.Getpgid(os.Getpid())
+		if err != nil {
+			return "", err
+		}
+		detail := fmt.Sprintf("child=%d parent=%d", pgid, parent)
+		if pgid != parent {
+			return detail, errors.New("a plain spawn did not inherit the parent's process group")
+		}
+		return detail, nil
+	}},
+
+	{"sysunsupported", func() (string, error) {
+		cmd := exec.Command("/bin/echo", "hello")
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+		err := cmd.Start()
+		if err == nil {
+			cmd.Process.Kill()
+			cmd.Wait()
+			return "", errors.New("Setsid was silently ignored")
+		}
+		if !strings.Contains(err.Error(), "Setsid") {
+			return err.Error(), errors.New("the error does not name the field that was refused")
+		}
+		return err.Error(), nil
+	}},
 }
 
 func main() {

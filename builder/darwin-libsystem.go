@@ -47,6 +47,7 @@ var darwinExtraLibSystemSymbols = []string{
 	"posix_spawnattr_destroy",
 	"posix_spawnattr_init",
 	"posix_spawnattr_setflags",
+	"posix_spawnattr_setpgroup",
 	"posix_spawnattr_setsigmask",
 }
 
