@@ -11,11 +11,29 @@ import (
 
 // Symbols that libSystem exports but the minimal macOS SDK in
 // lib/macos-minimal-sdk does not declare. Its generator reads a fixed list of
-// headers that does not contain <spawn.h>, so these names are absent from the
-// generated libSystem.s. The stubs below have the same form as the generated
-// ones, because the linker only needs to know that the names are in
-// libSystem.B.dylib.
+// headers that has neither <sys/socket.h> nor <spawn.h>, so these names are
+// absent from the generated libSystem.s. The stubs below have the same form as
+// the generated ones, because the linker only needs to know that the names are
+// in libSystem.B.dylib.
 var darwinExtraLibSystemSymbols = []string{
+	// The BSD socket API, which the host netdev in src/net reaches through
+	// the standard library syscall package.
+	"accept",
+	"bind",
+	"connect",
+	"getpeername",
+	"getsockname",
+	"getsockopt",
+	"listen",
+	"recvfrom",
+	"recvmsg",
+	"sendmsg",
+	"sendto",
+	"setsockopt",
+	"shutdown",
+	"socket",
+	"socketpair",
+
 	// The posix_spawn family, which src/os uses to start processes.
 	// posix_spawn_file_actions_addchdir_np came with macOS 10.15, so a binary
 	// from this toolchain needs at least that release.
