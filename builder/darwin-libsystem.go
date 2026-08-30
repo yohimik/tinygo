@@ -9,14 +9,15 @@ import (
 	"github.com/tinygo-org/tinygo/goenv"
 )
 
-// The BSD socket API, which libSystem exports but the minimal macOS SDK in
+// Symbols that libSystem exports but the minimal macOS SDK in
 // lib/macos-minimal-sdk does not declare: its stub generator reads a fixed list
-// of headers that does not include <sys/socket.h>, so the symbols are absent
-// from the generated libSystem.s. The host netdev in src/net reaches them
-// through the standard library's syscall package, so declare them here as the
-// same kind of empty stub the generated file uses — the linker only needs to
-// know the names live in libSystem.B.dylib.
+// of headers, and neither <sys/socket.h> nor <spawn.h> is on it, so these names
+// are absent from the generated libSystem.s. Declare them here as the same kind
+// of empty stub the generated file uses — the linker only needs to know the
+// names live in libSystem.B.dylib.
 var darwinExtraLibSystemSymbols = []string{
+	// The BSD socket API, reached by the host netdev in src/net through the
+	// standard library's syscall package.
 	"accept",
 	"bind",
 	"connect",
@@ -32,6 +33,21 @@ var darwinExtraLibSystemSymbols = []string{
 	"shutdown",
 	"socket",
 	"socketpair",
+
+	// The posix_spawn family, which src/os uses to start processes.
+	// posix_spawn_file_actions_addchdir_np was added in macOS 10.15, so a
+	// binary built with this toolchain needs at least that release even though
+	// the deployment target is lower.
+	"posix_spawn",
+	"posix_spawn_file_actions_addchdir_np",
+	"posix_spawn_file_actions_addclose",
+	"posix_spawn_file_actions_adddup2",
+	"posix_spawn_file_actions_destroy",
+	"posix_spawn_file_actions_init",
+	"posix_spawnattr_destroy",
+	"posix_spawnattr_init",
+	"posix_spawnattr_setflags",
+	"posix_spawnattr_setsigmask",
 }
 
 // Create a job that builds a Darwin libSystem.dylib stub library. This library
