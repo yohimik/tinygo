@@ -68,7 +68,7 @@ jobs:
         uses: actions/cache/restore@v5
         id: cache-llvm-source
         with:
-          key: llvm-source-22-linux-alpine-v1-${{ hashFiles('llvm-version.txt') }}
+          key: coldcheck-llvm-source-22-linux-alpine-v1-${{ hashFiles('llvm-version.txt') }}
           path: |
             llvm-project/clang/lib/Headers
             llvm-project/clang/include
@@ -80,7 +80,7 @@ jobs:
         run: make llvm-source
       - name: Save LLVM source cache
         uses: actions/cache/save@v5
-        if: steps.cache-llvm-source.outputs.cache-hit != 'true' && github.ref_type != 'tag'
+        if: steps.cache-llvm-source.outputs.cache-hit != 'true' && false
         with:
           key: ${{ steps.cache-llvm-source.outputs.cache-primary-key }}
           path: |
@@ -93,7 +93,7 @@ jobs:
         uses: actions/cache/restore@v5
         id: cache-llvm-build
         with:
-          key: llvm-build-22-linux-alpine-v1-${{ hashFiles('llvm-version.txt') }}
+          key: coldcheck-llvm-build-22-linux-alpine-v1-${{ hashFiles('llvm-version.txt') }}
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -109,7 +109,7 @@ jobs:
           find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
       - name: Save LLVM build cache
         uses: actions/cache/save@v5
-        if: steps.cache-llvm-build.outputs.cache-hit != 'true' && github.ref_type != 'tag'
+        if: steps.cache-llvm-build.outputs.cache-hit != 'true' && false
         with:
           key: ${{ steps.cache-llvm-build.outputs.cache-primary-key }}
           path: llvm-build
@@ -270,7 +270,7 @@ jobs:
         uses: actions/cache/restore@v5
         id: cache-llvm-source
         with:
-          key: llvm-source-22-linux-asserts-v1-${{ hashFiles('llvm-version.txt') }}
+          key: coldcheck-llvm-source-22-linux-asserts-v1-${{ hashFiles('llvm-version.txt') }}
           path: |
             llvm-project/clang/lib/Headers
             llvm-project/clang/include
@@ -282,7 +282,7 @@ jobs:
         run: make llvm-source
       - name: Save LLVM source cache
         uses: actions/cache/save@v5
-        if: steps.cache-llvm-source.outputs.cache-hit != 'true' && github.ref_type != 'tag'
+        if: steps.cache-llvm-source.outputs.cache-hit != 'true' && false
         with:
           key: ${{ steps.cache-llvm-source.outputs.cache-primary-key }}
           path: |
@@ -295,7 +295,7 @@ jobs:
         uses: actions/cache/restore@v5
         id: cache-llvm-build
         with:
-          key: llvm-build-22-linux-asserts-v1-${{ hashFiles('llvm-version.txt') }}
+          key: coldcheck-llvm-build-22-linux-asserts-v1-${{ hashFiles('llvm-version.txt') }}
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -309,7 +309,7 @@ jobs:
           find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
       - name: Save LLVM build cache
         uses: actions/cache/save@v5
-        if: steps.cache-llvm-build.outputs.cache-hit != 'true' && github.ref_type != 'tag'
+        if: steps.cache-llvm-build.outputs.cache-hit != 'true' && false
         with:
           key: ${{ steps.cache-llvm-build.outputs.cache-primary-key }}
           path: llvm-build
@@ -379,7 +379,7 @@ jobs:
         uses: actions/cache/restore@v5
         id: cache-llvm-source
         with:
-          key: llvm-source-22-linux-v1-${{ hashFiles('llvm-version.txt') }}
+          key: coldcheck-llvm-source-22-linux-v1-${{ hashFiles('llvm-version.txt') }}
           path: |
             llvm-project/clang/lib/Headers
             llvm-project/clang/include
@@ -391,7 +391,7 @@ jobs:
         run: make llvm-source
       - name: Save LLVM source cache
         uses: actions/cache/save@v5
-        if: steps.cache-llvm-source.outputs.cache-hit != 'true' && github.ref_type != 'tag'
+        if: steps.cache-llvm-source.outputs.cache-hit != 'true' && false
         with:
           key: ${{ steps.cache-llvm-source.outputs.cache-primary-key }}
           path: |
@@ -404,7 +404,7 @@ jobs:
         uses: actions/cache/restore@v5
         id: cache-llvm-build
         with:
-          key: llvm-build-22-linux-${{ matrix.goarch }}-v1-${{ hashFiles('llvm-version.txt') }}
+          key: coldcheck-llvm-build-22-linux-${{ matrix.goarch }}-v1-${{ hashFiles('llvm-version.txt') }}
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -420,7 +420,7 @@ jobs:
           find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
       - name: Save LLVM build cache
         uses: actions/cache/save@v5
-        if: steps.cache-llvm-build.outputs.cache-hit != 'true' && github.ref_type != 'tag'
+        if: steps.cache-llvm-build.outputs.cache-hit != 'true' && false
         with:
           key: ${{ steps.cache-llvm-build.outputs.cache-primary-key }}
           path: llvm-build
