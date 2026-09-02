@@ -10,7 +10,7 @@ import (
 
 // Version of TinyGo.
 // Update this value before release of new version of software.
-const version = "0.42.0-net.4"
+const version = "0.43.0-net.1"
 
 // Return TinyGo version, either in the form 0.30.0 or as a development version
 // (like 0.30.0-dev-abcd012).
