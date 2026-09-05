@@ -311,24 +311,68 @@ func forkExec(argv0 string, argv []string, attr *ProcAttr) (pid int, err error) 
 		}
 	}
 
-	// Lay the child's file descriptors out the way ProcAttr describes: entry i
-	// becomes the child's descriptor i, and a missing entry means the
-	// descriptor is closed. os/exec always passes three of these (stdin,
-	// stdout, stderr) plus one per ExtraFiles entry.
+	defer runtime.KeepAlive(attr.Files)
+	fds := make([]int, len(attr.Files))
+	nextfd := len(fds)
+	if nextfd < 3 {
+		nextfd = 3
+	}
 	for i, f := range attr.Files {
 		fd := ^uintptr(0)
 		if f != nil {
 			fd = f.Fd()
 		}
-		if fd == ^uintptr(0) {
-			if errno := posix_spawn_file_actions_addclose(&fa, int32(i)); errno != 0 {
+		fds[i] = -1
+		if fd != ^uintptr(0) {
+			if fd >= 1<<31-1 {
+				return 0, syscall.EBADF
+			}
+			fds[i] = int(fd)
+			if int(fd) >= nextfd {
+				nextfd = int(fd) + 1
+			}
+		}
+	}
+
+	// Save sources before an earlier action replaces or closes them.
+	// See Go src/syscall/exec_linux.go, forkAndExecInChild, Pass 1.
+	firstTemp := nextfd
+	for i, fd := range fds {
+		if fd >= 0 && fd < i {
+			if nextfd >= 1<<31-1 {
+				return 0, syscall.EINVAL
+			}
+			if errno := posix_spawn_file_actions_adddup2(&fa, int32(fd), int32(nextfd)); errno != 0 {
 				return 0, syscall.Errno(errno)
+			}
+			fds[i] = nextfd
+			nextfd++
+		}
+	}
+
+	for i, fd := range fds {
+		if fd == -1 {
+			if err := addSpawnClose(&fa, int32(i)); err != nil {
+				return 0, err
 			}
 			continue
 		}
 		// dup2 onto the same descriptor is defined to clear FD_CLOEXEC rather
 		// than being a no-op, which is what makes an inherited os.Stdin work.
 		if errno := posix_spawn_file_actions_adddup2(&fa, int32(fd), int32(i)); errno != 0 {
+			return 0, syscall.Errno(errno)
+		}
+	}
+
+	// Close the standard descriptors that ProcAttr.Files does not name, which
+	// is what syscall.forkAndExecInChild does in the standard library.
+	for i := len(attr.Files); i < 3; i++ {
+		if err := addSpawnClose(&fa, int32(i)); err != nil {
+			return 0, err
+		}
+	}
+	for fd := firstTemp; fd < nextfd; fd++ {
+		if errno := posix_spawn_file_actions_addclose(&fa, int32(fd)); errno != 0 {
 			return 0, syscall.Errno(errno)
 		}
 	}
