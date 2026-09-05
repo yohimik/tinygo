@@ -24,7 +24,7 @@ func TestHTTPSubpackageMerge(t *testing.T) {
 			}
 		}
 	}
-	paths := pathsToOverride(26, false)
+	paths := pathsToOverride(26, false, false)
 	overrides := make(map[string]bool)
 	for _, path := range []string{"net/http/", "net/http/httptest/", "net/http/internal/"} {
 		value, ok := paths[path]
