@@ -15,22 +15,6 @@ int syscall_libc_open(const char *pathname, int flags, mode_t mode) {
     return open(pathname, flags, mode);
 }
 
-// Same story for 'fcntl', for the same reason: its third parameter is variadic,
-// so calling it through a plain three-argument function pointer leaves the
-// callee reading that argument from whatever the stack happened to hold. The
-// symptom is a silent one — fcntl(fd, F_SETFD, FD_CLOEXEC) sets the flag or
-// not depending on stack residue, so descriptors leak into spawned children
-// and a child holding a duplicate write end keeps a pipe from reporting EOF.
-//
-// The argument is taken as a uintptr_t so that the pointer-shaped commands
-// (F_GETLK, F_SETLK, F_PREALLOCATE, ...) reached through syscall.fcntlPtr go
-// through the same wrapper: both spellings share libc_fcntl_trampoline, and on
-// a little-endian target the int-shaped commands read the low half of the same
-// stack slot.
-int syscall_libc_fcntl(int fd, int cmd, uintptr_t arg) {
-    return fcntl(fd, cmd, arg);
-}
-
 // Wrapper for ioctl, which is variadic just like open and therefore also uses
 // an incompatible calling convention on darwin/arm64. Use uintptr_t arguments
 // to match the fixed-signature call made by tinygo_syscall below.
