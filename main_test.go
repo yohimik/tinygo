@@ -122,6 +122,9 @@ func TestBuild(t *testing.T) {
 		t.Parallel()
 		hostOptions := optionsFromTarget("", sema)
 		runPlatTests(hostOptions, tests, t)
+		if runtime.GOOS == "darwin" {
+			runPlatTests(hostOptions, []string{"darwinsockets.go"}, t)
+		}
 
 		// scheduler.threads needs threadID, which exists only on Linux and Darwin.
 		// scheduler.none does not link on Windows.
@@ -370,10 +373,6 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 				// Too big for AVR. Doesn't fit in flash/RAM.
 				continue
 
-			case "math.go":
-				// Needs newer picolibc version (for sqrt).
-				continue
-
 			case "cgo/":
 				// CGo function pointers don't work on AVR (needs LLVM 16 and
 				// some compiler changes).
@@ -431,6 +430,10 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			testOptions := compileopts.Options(options)
 			if name == "finalizerinvariants.go" || name == "finalizerlarge.go" {
 				testOptions.Tags = append(append([]string(nil), options.Tags...), "runtime_asserts")
+			}
+			if testOptions.Target == "simavr" && name == "math.go" {
+				// This test exceeds simavr's default 384-byte goroutine stack.
+				testOptions.StackSize = 512
 			}
 			runTest(name, testOptions, t, nil, nil)
 		})
