@@ -14,7 +14,7 @@ import (
 // Test the functionality of StartProcess, which spawns a new process and
 // reports its exit status through Wait.
 func TestForkExec(t *testing.T) {
-	proc, err := StartProcess("/bin/echo", []string{"echo", "hello", "world"}, &ProcAttr{})
+	proc, err := StartProcess("/bin/sh", []string{"sh", "-c", "exit 0"}, &ProcAttr{})
 	if err != nil {
 		t.Fatalf("StartProcess failed: %v", err)
 	}
@@ -123,7 +123,7 @@ func TestForkExecProcDir(t *testing.T) {
 // A SysProcAttr whose fields are all zero asks for nothing, so it is accepted
 // and the child starts as it would have without one.
 func TestForkExecProcSysEmpty(t *testing.T) {
-	proc, err := StartProcess("/bin/echo", []string{"echo", "hello", "world"}, &ProcAttr{Sys: &syscall.SysProcAttr{}})
+	proc, err := StartProcess("/bin/sh", []string{"sh", "-c", "exit 0"}, &ProcAttr{Sys: &syscall.SysProcAttr{}})
 	if err != nil {
 		t.Fatalf("StartProcess failed: %v", err)
 	}
@@ -273,6 +273,21 @@ func TestForkExecDescriptorsDoNotLeak(t *testing.T) {
 }
 
 // Files are handed to the child as its descriptors 0, 1 and 2.
+func TestForkExecClosesUnnamedStdio(t *testing.T) {
+	// A redirection error in exec exits the shell. See POSIX 2.8.1.
+	proc, err := StartProcess("/bin/sh", []string{"sh", "-c", "exec 3>&1"}, &ProcAttr{})
+	if err != nil {
+		t.Fatalf("StartProcess failed: %v", err)
+	}
+	state, err := proc.Wait()
+	if err != nil {
+		t.Fatalf("Wait failed: %v", err)
+	}
+	if state.Success() {
+		t.Errorf("the child still had standard output, got %v", state)
+	}
+}
+
 func TestForkExecProcFiles(t *testing.T) {
 	r, w, err := Pipe()
 	if err != nil {
